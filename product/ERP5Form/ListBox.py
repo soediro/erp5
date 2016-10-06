@@ -966,13 +966,20 @@ class ListBoxRenderer:
     return {id for id, title in self.getAllColumnList() if isValidColumn(id)}
 
   @lazyMethod
-  def getSortColumnIdSet(self):
+  def getSortColumnDict(self):
     """Return the set of the ids of the sort columns. Fall back to search column ids, if not defined.
     """
     sort_columns = self.field.get_value('sort_columns')
     if sort_columns:
-      return {c[0] for c in sort_columns}
-    return self.getSearchColumnIdSet()
+      sort_dict = {}
+      for c, _ in sort_columns:
+        i = c.find(':')
+        if i < 0:
+          sort_dict[c] = ''
+        else:
+          sort_dict[c[:i]] = c[i:]
+      return sort_dict
+    return dict.fromkeys(self.getSearchColumnIdSet(), '')
 
   @lazyMethod
   def getEditableColumnIdSet(self):
@@ -1034,8 +1041,8 @@ class ListBoxRenderer:
       selection.edit(default_sort_on = self.getDefaultSortColumnList())
 
       # Filter out non-sortable items.
-      sort_column_id_set = self.getSortColumnIdSet()
-      sort_list = [c for c in selection.sort_on if c[0] in sort_column_id_set]
+      sort_column_dict = self.getSortColumnDict()
+      sort_list = [c for c in selection.sort_on if c[0] in sort_column_dict]
       if len(selection.sort_on) != len(sort_list):
         selection.sort_on = sort_list
 
@@ -1557,17 +1564,18 @@ class ListBoxRenderer:
     set to None, otherwise to a string.
     """
     sort_list = self.getSelectionTool().getSelectionSortOrder(self.getSelectionName())
-    sort_dict = {}
-    for sort_item in sort_list:
-      sort_dict[sort_item[0]] = sort_item[1] # sort_item can be couple or a triplet
-    sort_column_id_set = self.getSortColumnIdSet()
+    # sort_item can be couple or a triplet
+    sort_dict = {sort_item[0]: sort_item[1] for sort_item in sort_list}
+    sort_column_dict = self.getSortColumnDict()
 
     value_list = []
     for c in self.getSelectedColumnList():
-      if c[0] in sort_column_id_set:
-        value_list.append((c[0], c[1], sort_dict.get(c[0])))
-      else:
+      column_id = c[0]
+      as_type = sort_column_dict.get(column_id)
+      if as_type is None:
         value_list.append((None, c[1], None))
+      else:
+        value_list.append((column_id + as_type, c[1], sort_dict.get(column_id)))
 
     return value_list
 
